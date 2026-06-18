@@ -3,9 +3,11 @@ import 'dart:isolate';
 import 'dart:math';
 
 import 'package:desktop_drop/desktop_drop.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' show ThemeMode;
 import 'package:flutter/services.dart';
+import 'package:macos_ui/macos_ui.dart';
 
 const _kSupportedExtensions = {
   '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.tif', '.webp', '.heic'
@@ -33,7 +35,18 @@ List<String> _scanDirectory(String path) {
   return images;
 }
 
-void main() {
+/// Initializes macos_window_utils and styles the window to match the
+/// modern (Big Sur+) macOS look with a unified, translucent toolbar.
+Future<void> _configureMacosWindow() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  const config = MacosWindowUtilsConfig(
+    toolbarStyle: NSWindowToolbarStyle.unified,
+  );
+  await config.apply();
+}
+
+void main() async {
+  await _configureMacosWindow();
   runApp(const PhotoViewerApp());
 }
 
@@ -42,21 +55,12 @@ class PhotoViewerApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    return MacosApp(
       title: 'Photo Viewer',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.blue,
-          brightness: Brightness.light,
-        ),
-      ),
-      darkTheme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.blue,
-          brightness: Brightness.dark,
-        ),
-      ),
+      theme: MacosThemeData.light(),
+      darkTheme: MacosThemeData.dark(),
       themeMode: ThemeMode.system,
+      debugShowCheckedModeBanner: false,
       home: const PhotoViewerPage(),
     );
   }
@@ -251,13 +255,16 @@ class _PhotoViewerPageState extends State<PhotoViewerPage> {
   String get _title {
     if (_filePath == null) return 'Photo Viewer';
     if (_imageFiles.length > 1) {
-      return '${_currentIndex + 1}/${_imageFiles.length} - $_filename';
+      return '${_currentIndex + 1} of ${_imageFiles.length}  ·  $_filename';
     }
     return _filename;
   }
 
   @override
   Widget build(BuildContext context) {
+    final hasImage = _filePath != null;
+    final canNavigate = _imageFiles.length > 1;
+
     return Shortcuts(
       shortcuts: {
         LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.arrowLeft):
@@ -286,97 +293,85 @@ class _PhotoViewerPageState extends State<PhotoViewerPage> {
         },
         child: Focus(
           autofocus: true,
-          child: Scaffold(
-            appBar: AppBar(
-              leading: _imageFiles.length > 1
-                  ? IconButton(
-                      icon: const Icon(Icons.arrow_back_ios),
-                      onPressed: _previousImage,
-                      tooltip: 'Previous Image (Left Arrow)',
-                    )
-                  : null,
-              title: Text(_title),
-              backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-              actions: [
-                if (_imageFiles.length > 1)
-                  IconButton(
-                    icon: const Icon(Icons.arrow_forward_ios),
-                    onPressed: _nextImage,
-                    tooltip: 'Next Image (Right Arrow)',
+          child: MacosWindow(
+            child: MacosScaffold(
+              toolBar: ToolBar(
+                title: Text(_title),
+                titleWidth: 320.0,
+                actions: [
+                  ToolBarIconButton(
+                    label: 'Previous',
+                    icon: const MacosIcon(CupertinoIcons.chevron_left),
+                    onPressed: canNavigate ? _previousImage : null,
+                    showLabel: false,
+                    tooltipMessage: 'Previous Image (Left Arrow)',
                   ),
-                IconButton(
-                  icon: const Icon(Icons.rotate_left),
-                  onPressed: _filePath != null ? _rotateLeft : null,
-                  tooltip: 'Rotate Left (Cmd+Left)',
-                ),
-                IconButton(
-                  icon: const Icon(Icons.rotate_right),
-                  onPressed: _filePath != null ? _rotateRight : null,
-                  tooltip: 'Rotate Right (Cmd+Right)',
-                ),
-                IconButton(
-                  icon: const Icon(Icons.zoom_in),
-                  onPressed: _filePath != null ? _zoomIn : null,
-                  tooltip: 'Zoom In',
-                ),
-                IconButton(
-                  icon: const Icon(Icons.zoom_out),
-                  onPressed: _filePath != null ? _zoomOut : null,
-                  tooltip: 'Zoom Out',
-                ),
-                IconButton(
-                  icon: const Icon(Icons.refresh),
-                  onPressed: _filePath != null ? _reset : null,
-                  tooltip: 'Reset',
-                ),
-              ],
-            ),
-            body: DropTarget(
-              onDragEntered: (_) => setState(() => _isDragging = true),
-              onDragExited: (_) => setState(() => _isDragging = false),
-              onDragDone: (details) {
-                setState(() => _isDragging = false);
-                _handleDrop(details);
-              },
-              child: Stack(
-                children: [
-                  _buildBody(),
-                  if (_isDragging)
-                    Container(
-                      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
-                      child: Center(
-                        child: Container(
-                          padding: const EdgeInsets.all(32),
-                          decoration: BoxDecoration(
-                            color: Theme.of(context).colorScheme.surface,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: Theme.of(context).colorScheme.primary,
-                              width: 2,
-                            ),
-                          ),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.file_download,
-                                size: 48,
-                                color: Theme.of(context).colorScheme.primary,
-                              ),
-                              const SizedBox(height: 16),
-                              Text(
-                                'Drop image here',
-                                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                  color: Theme.of(context).colorScheme.primary,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
+                  ToolBarIconButton(
+                    label: 'Next',
+                    icon: const MacosIcon(CupertinoIcons.chevron_right),
+                    onPressed: canNavigate ? _nextImage : null,
+                    showLabel: false,
+                    tooltipMessage: 'Next Image (Right Arrow)',
+                  ),
+                  const ToolBarSpacer(),
+                  ToolBarIconButton(
+                    label: 'Rotate Left',
+                    icon: const MacosIcon(CupertinoIcons.rotate_left),
+                    onPressed: hasImage ? _rotateLeft : null,
+                    showLabel: false,
+                    tooltipMessage: 'Rotate Left (Cmd+Left)',
+                  ),
+                  ToolBarIconButton(
+                    label: 'Rotate Right',
+                    icon: const MacosIcon(CupertinoIcons.rotate_right),
+                    onPressed: hasImage ? _rotateRight : null,
+                    showLabel: false,
+                    tooltipMessage: 'Rotate Right (Cmd+Right)',
+                  ),
+                  const ToolBarSpacer(),
+                  ToolBarIconButton(
+                    label: 'Zoom Out',
+                    icon: const MacosIcon(CupertinoIcons.zoom_out),
+                    onPressed: hasImage ? _zoomOut : null,
+                    showLabel: false,
+                    tooltipMessage: 'Zoom Out',
+                  ),
+                  ToolBarIconButton(
+                    label: 'Zoom In',
+                    icon: const MacosIcon(CupertinoIcons.zoom_in),
+                    onPressed: hasImage ? _zoomIn : null,
+                    showLabel: false,
+                    tooltipMessage: 'Zoom In',
+                  ),
+                  ToolBarIconButton(
+                    label: 'Reset',
+                    icon: const MacosIcon(CupertinoIcons.arrow_counterclockwise),
+                    onPressed: hasImage ? _reset : null,
+                    showLabel: false,
+                    tooltipMessage: 'Reset Zoom & Rotation',
+                  ),
                 ],
               ),
+              children: [
+                ContentArea(
+                  builder: (context, scrollController) {
+                    return DropTarget(
+                      onDragEntered: (_) => setState(() => _isDragging = true),
+                      onDragExited: (_) => setState(() => _isDragging = false),
+                      onDragDone: (details) {
+                        setState(() => _isDragging = false);
+                        _handleDrop(details);
+                      },
+                      child: Stack(
+                        children: [
+                          _buildBody(),
+                          if (_isDragging) _buildDropOverlay(),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ],
             ),
           ),
         ),
@@ -384,30 +379,66 @@ class _PhotoViewerPageState extends State<PhotoViewerPage> {
     );
   }
 
+  Widget _buildDropOverlay() {
+    final theme = MacosTheme.of(context);
+    return Container(
+      color: theme.primaryColor.withValues(alpha: 0.08),
+      child: Center(
+        child: Container(
+          padding: const EdgeInsets.all(32),
+          decoration: BoxDecoration(
+            color: theme.canvasColor,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: theme.primaryColor, width: 2),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              MacosIcon(
+                CupertinoIcons.tray_arrow_down,
+                size: 48,
+                color: theme.primaryColor,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Drop image here',
+                style: theme.typography.title2.copyWith(
+                  color: theme.primaryColor,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildBody() {
+    final theme = MacosTheme.of(context);
+
     if (_filePath == null) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.image_outlined,
-              size: 80,
-              color: Theme.of(context).colorScheme.outline,
+            MacosIcon(
+              CupertinoIcons.photo,
+              size: 72,
+              color: MacosColors.systemGrayColor,
             ),
             const SizedBox(height: 16),
             Text(
-              'No image loaded',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    color: Theme.of(context).colorScheme.outline,
-                  ),
+              'No Image Open',
+              style: theme.typography.title1.copyWith(
+                color: MacosColors.systemGrayColor,
+              ),
             ),
             const SizedBox(height: 8),
             Text(
-              'Drop an image here or use "Open with" from Finder',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.outline,
-                  ),
+              'Drop an image here or use “Open With” from Finder',
+              style: theme.typography.body.copyWith(
+                color: MacosColors.systemGrayColor,
+              ),
             ),
           ],
         ),
@@ -419,17 +450,17 @@ class _PhotoViewerPageState extends State<PhotoViewerPage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.error_outline,
-              size: 80,
-              color: Theme.of(context).colorScheme.error,
+            MacosIcon(
+              CupertinoIcons.exclamationmark_triangle,
+              size: 72,
+              color: MacosColors.systemRedColor,
             ),
             const SizedBox(height: 16),
             Text(
-              'Failed to load image',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    color: Theme.of(context).colorScheme.error,
-                  ),
+              'Failed to Load Image',
+              style: theme.typography.title1.copyWith(
+                color: MacosColors.systemRedColor,
+              ),
             ),
           ],
         ),
