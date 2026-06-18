@@ -1,5 +1,6 @@
 import Cocoa
 import FlutterMacOS
+import macos_window_utils
 
 @main
 class AppDelegate: FlutterAppDelegate {
@@ -19,7 +20,9 @@ class AppDelegate: FlutterAppDelegate {
   }
 
   override func applicationDidFinishLaunching(_ notification: Notification) {
-    if let controller = mainFlutterWindow?.contentViewController as? FlutterViewController {
+    // macos_window_utils wraps the FlutterViewController in a
+    // MacOSWindowUtilsViewController, so reach it through that wrapper.
+    if let controller = (mainFlutterWindow?.contentViewController as? MacOSWindowUtilsViewController)?.flutterViewController {
       fileChannel = FlutterMethodChannel(
         name: "com.example.basic_photo_viewer/file",
         binaryMessenger: controller.engine.binaryMessenger
