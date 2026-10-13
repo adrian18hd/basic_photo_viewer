@@ -6,6 +6,7 @@ import macos_window_utils
 class AppDelegate: FlutterAppDelegate {
   private var fileChannel: FlutterMethodChannel?
   private var pendingInvocations: [(method: String, arguments: Any)] = []
+  private var isDartReady = false
 
   private let supportedExtensions: Set<String> = [
     "jpg", "jpeg", "png", "gif", "bmp", "tiff", "tif", "webp", "heic"
@@ -28,19 +29,35 @@ class AppDelegate: FlutterAppDelegate {
         binaryMessenger: controller.engine.binaryMessenger
       )
 
-      // Flush any invocations queued before Flutter initialized. Drain a local
-      // copy first so a re-entrant enqueue during invoke can't be lost.
-      let queued = pendingInvocations
-      pendingInvocations = []
-      for inv in queued {
-        fileChannel?.invokeMethod(inv.method, arguments: inv.arguments)
+      // Files opened at launch (Finder double-click / Open With) arrive before
+      // Dart has registered its handler. Messages sent then are dropped or
+      // overwritten (Flutter buffers only one per channel), so hold them until
+      // Dart reports "ready".
+      fileChannel?.setMethodCallHandler { [weak self] call, result in
+        guard let self = self else { return }
+        if call.method == "ready" {
+          self.isDartReady = true
+          self.flushPendingInvocations()
+          result(nil)
+        } else {
+          result(FlutterMethodNotImplemented)
+        }
       }
+    }
+  }
+
+  // Drain a local copy first so a re-entrant enqueue during invoke can't be lost.
+  private func flushPendingInvocations() {
+    let queued = pendingInvocations
+    pendingInvocations = []
+    for inv in queued {
+      fileChannel?.invokeMethod(inv.method, arguments: inv.arguments)
     }
   }
 
   // MUST be called on the main thread.
   private func sendOrQueue(_ method: String, _ arguments: Any) {
-    if let channel = fileChannel {
+    if isDartReady, let channel = fileChannel {
       channel.invokeMethod(method, arguments: arguments)
     } else {
       pendingInvocations.append((method, arguments))

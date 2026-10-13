@@ -105,6 +105,9 @@ class _PhotoViewerPageState extends State<PhotoViewerPage> {
   void initState() {
     super.initState();
     _channel.setMethodCallHandler(_handleMethodCall);
+    // Tell native the handler is registered so it can deliver any file that
+    // was opened (e.g. via Finder double-click) before Dart finished starting.
+    _channel.invokeMethod('ready');
   }
 
   Future<dynamic> _handleMethodCall(MethodCall call) async {

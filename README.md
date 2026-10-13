@@ -34,7 +34,7 @@ the folder — without launching a heavyweight photo library.
 ## Getting started
 
 This is a standard Flutter app. You'll need the
-[Flutter SDK](https://docs.flutter.dev/get-started/install) (Dart `^3.8.1`) with
+[Flutter SDK](https://docs.flutter.dev/get-started/install) (Dart 3.8 or newer) with
 macOS desktop support enabled.
 
 ```bash
@@ -56,8 +56,8 @@ The release build is produced at
 - `lib/main.dart` — the entire app: UI, image rendering, zoom/rotate/navigation
   logic, and the platform channel that receives files from Finder.
 - `macos/` — the macOS runner, including the native side of the "Open With"
-  integration.
-- `test/` — widget tests.
+  integration. Native plugin dependencies come from Swift Package Manager;
+  CocoaPods is not used.
 
 ## How "Open With" works
 
